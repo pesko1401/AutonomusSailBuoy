@@ -1,0 +1,190 @@
+<!doctype html>
+<html>
+<head>
+    <title>Sensor Data</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-wrap: wrap;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 800px;
+        }
+        h1 {
+            font-size: 2em;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .chart-container {
+            width: 100%;
+            margin: 20px 0;
+        }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            text-decoration: none;
+            background: #007BFF;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        a:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="sensor-type">Sensor Data</h1>
+        <div class="chart-container">
+            <canvas id="sensorChart"></canvas>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody id="sensor-table">
+                <!-- Sensor data will be dynamically inserted here -->
+            </tbody>
+        </table>
+        <a href="#" id="download-link" class="download-link">Download Sensor Data</a>
+        <br><br>
+        <a href="/" class="back-link">Back to Home</a>
+    </div>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const sensorType = urlParams.get('type');
+
+        function formatTimestamp(index, labels) {
+            const label = labels[index];
+            const date = new Date();
+            const [hour, minute, second] = label.split(':');
+            date.setHours(hour);
+            date.setMinutes(minute);
+            if (second) {
+                date.setSeconds(second);
+            } else {
+                date.setSeconds(0);
+            }
+            const timeString = date.toLocaleTimeString();
+            const dateString = date.toLocaleDateString();
+            return { timeString, dateString };
+        }
+
+        function updateTable(data, labels) {
+            const tableBody = $('#sensor-table');
+            tableBody.empty(); // Clear previous data
+
+            data.forEach((value, index) => {
+                const { timeString, dateString } = formatTimestamp(index, labels);
+                tableBody.append(`<tr>
+                    <td>${dateString}</td>
+                    <td>${timeString}</td>
+                    <td>${Array.isArray(value) ? value.join(', ') : value}</td>
+                </tr>`);
+            });
+        }
+
+        function createChart(ctx, labels, datasets) {
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Value'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            $('#sensor-type').text(sensorType.charAt(0).toUpperCase() + sensorType.slice(1) + ' Data');
+            $('#download-link').attr('href', `/download_log?sensor=${sensorType}`);
+
+            // Fetch real sensor data
+            $.ajax({
+                url: `/fetch_sensor_data?sensor=${sensorType}`,
+                method: 'GET',
+                success: function(response) {
+                    const { labels, data } = response;
+                    updateTable(data, labels);
+
+                    const datasets = [];
+
+                    if (sensorType === 'magnetometer' || sensorType === 'accelerometer') {
+                        const axisLabels = ['X', 'Y', 'Z'];
+                        axisLabels.forEach((axis, i) => {
+                            datasets.push({
+                                label: `${sensorType.charAt(0).toUpperCase() + sensorType.slice(1)} (${axis})`,
+                                data: data.map(d => d[i]),
+                                borderColor: ['rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(75, 192, 192, 1)'][i],
+                                backgroundColor: ['rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)', 'rgba(75, 192, 192, 0.2)'][i],
+                                fill: false
+                            });
+                        });
+                    } else {
+                        datasets.push({
+                            label: sensorType.charAt(0).toUpperCase() + sensorType.slice(1),
+                            data: data,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            fill: true
+                        });
+                    }
+
+                    createChart(document.getElementById('sensorChart'), labels, datasets);
+                },
+                error: function() {
+                    alert('Failed to fetch sensor data');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

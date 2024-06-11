@@ -1,0 +1,298 @@
+<!doctype html>
+<html>
+<head>
+    <title>Real-Time Sensor Data</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e0e0e0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 1200px;
+            padding: 20px;
+            margin: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #333;
+        }
+
+        .location {
+            font-size: 1.2em;
+            color: #555;
+            margin-bottom: 20px;
+        }
+
+        .sidebar {
+            width: 200px;
+            background-color: #333;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+        }
+
+            .sidebar a {
+                display: block;
+                color: white;
+                padding: 10px;
+                text-decoration: none;
+                margin-bottom: 10px;
+                border-radius: 5px;
+                transition: background 0.3s;
+            }
+
+                .sidebar a:hover {
+                    background: #575757;
+                }
+
+        .content {
+            margin-left: 240px;
+            padding: 20px;
+            width: calc(100% - 240px);
+        }
+
+        .chart-container {
+            width: 30%;
+            margin: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: inline-block;
+            vertical-align: top;
+        }
+
+            .chart-container h2 {
+                font-size: 1.2em;
+                margin-bottom: 5px;
+            }
+
+            .chart-container .latest-data {
+                font-size: 1em;
+                margin-top: 5px;
+                color: #555;
+            }
+
+        .download-btn {
+            display: inline-block;
+            margin-top: 20px;
+            text-decoration: none;
+            background: #007BFF;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: background 0.3s;
+            text-align: center;
+        }
+
+            .download-btn:hover {
+                background: #0056b3;
+            }
+
+        .centered {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <a href="/sensor_data?type=temperature">Temperature Data</a>
+        <a href="/sensor_data?type=sst">SST Data</a>
+        <a href="/sensor_data?type=humidity">Humidity Data</a>
+        <a href="/sensor_data?type=pressure">Pressure Data</a>
+        <a href="/sensor_data?type=magnetometer">Magnetometer Data</a>
+        <a href="/sensor_data?type=accelerometer">Accelerometer Data</a>
+    </div>
+    <div class="content">
+        <div class="container">
+            <div class="header">
+                <h1>Real-Time Sensor Data</h1>
+                <div class="location">Data collected at location: <span id="location"></span></div>
+            </div>
+            <div id="charts-container" class="centered">
+                <div class="chart-container">
+                    <h2>Temperature Data</h2>
+                    <canvas id="temperatureChart"></canvas>
+                    <div class="latest-data" id="latest-temperature"></div>
+                </div>
+                <div class="chart-container">
+                    <h2>SST Data</h2>
+                    <canvas id="sstChart"></canvas>
+                    <div class="latest-data" id="latest-sst"></div>
+                </div>
+                <div class="chart-container">
+                    <h2>Humidity Data</h2>
+                    <canvas id="humidityChart"></canvas>
+                    <div class="latest-data" id="latest-humidity"></div>
+                </div>
+                <div class="chart-container">
+                    <h2>Pressure Data</h2>
+                    <canvas id="pressureChart"></canvas>
+                    <div class="latest-data" id="latest-pressure"></div>
+                </div>
+                <div class="chart-container">
+                    <h2>Magnetometer Data</h2>
+                    <canvas id="magnetometerChart"></canvas>
+                    <div class="latest-data" id="latest-magnetometer"></div>
+                </div>
+                <div class="chart-container">
+                    <h2>Accelerometer Data</h2>
+                    <canvas id="accelerometerChart"></canvas>
+                    <div class="latest-data" id="latest-accelerometer"></div>
+                </div>
+            </div>
+            <div class="centered">
+                <a href="/download_log" download class="download-btn">Download Log File</a>
+            </div>
+        </div>
+    </div>
+    <script>
+        function createChart(ctx, labels, datasets) {
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Value'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function fetchData(sensorType) {
+            return $.ajax({
+                url: `/fetch_sensor_data?sensor=${sensorType}`,
+                method: 'GET'
+            });
+        }
+
+        function updateChart(sensorType, chartId, latestId, datasets) {
+            fetchData(sensorType).then(response => {
+                const { labels, data } = response;
+                const latestData = data[data.length - 1];
+                createChart(document.getElementById(chartId), labels, datasets.map((dataset, index) => {
+                    return {
+                        ...dataset,
+                        data: data.map(d => Array.isArray(d) ? d[index] : d)
+                    };
+                }));
+                $(`#${latestId}`).text(`Latest data received: ${Array.isArray(latestData) ? latestData.join(', ') : latestData}`);
+            }).catch(() => {
+                alert(`Failed to fetch ${sensorType} data`);
+            });
+        }
+
+        $(document).ready(function () {
+            $('#location').text("Latitude: XX.XXXX, Longitude: XX.XXXX");
+
+            updateChart('temperature', 'temperatureChart', 'latest-temperature', [{
+                label: 'Temperature (°C)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true
+            }]);
+
+            updateChart('sst', 'sstChart', 'latest-sst', [{
+                label: 'SST',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true
+            }]);
+
+            updateChart('humidity', 'humidityChart', 'latest-humidity', [{
+                label: 'Humidity (%)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true
+            }]);
+
+            updateChart('pressure', 'pressureChart', 'latest-pressure', [{
+                label: 'Pressure (hPa)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true
+            }]);
+
+            updateChart('magnetometer', 'magnetometerChart', 'latest-magnetometer', [
+                {
+                    label: 'Magnetometer (X)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    fill: false
+                },
+                {
+                    label: 'Magnetometer (Y)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    fill: false
+                },
+                {
+                    label: 'Magnetometer (Z)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    fill: false
+                }
+            ]);
+
+            updateChart('accelerometer', 'accelerometerChart', 'latest-accelerometer', [
+                {
+                    label: 'Accelerometer (X)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    fill: false
+                },
+                {
+                    label: 'Accelerometer (Y)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    fill: false
+                },
+                {
+                    label: 'Accelerometer (Z)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    fill: false
+                }
+            ]);
+        });
+    </script>
+</body>
+</html>
